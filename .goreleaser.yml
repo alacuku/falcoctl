@@ -1,7 +1,4 @@
 project_name: falcoctl
-before:
-  hooks:
-    - go mod tidy
 
 builds:
   - id: "falcoctl"
