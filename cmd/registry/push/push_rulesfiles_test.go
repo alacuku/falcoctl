@@ -19,9 +19,11 @@ package push_test
 
 import (
 	"fmt"
+	"github.com/falcosecurity/falcoctl/internal/utils"
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,14 +31,13 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/falcosecurity/falcoctl/cmd"
-	"github.com/falcosecurity/falcoctl/internal/utils"
 	"github.com/falcosecurity/falcoctl/pkg/oci"
 	testutils "github.com/falcosecurity/falcoctl/pkg/test"
 )
 
 // revive:enable
 
-var _ = Describe("pushing rulesfiles", func() {
+var rulesfiles = Describe("pushing rulesfiles", func() {
 	var (
 		registryCmd = "registry"
 		pushCmd     = "push"
@@ -113,15 +114,21 @@ var _ = Describe("pushing rulesfiles", func() {
 			Expect(rulesfileData.Tags).Should(ContainElements(pushedTags))
 
 			By("checking that temporary dirs have been removed")
-			entries, err := os.ReadDir("/tmp")
-			Expect(err).ShouldNot(HaveOccurred())
-			for _, e := range entries {
-				if e.IsDir() {
-					matched, err := filepath.Match(utils.TmpDirPrefix+"*", regexp.QuoteMeta(e.Name()))
-					Expect(err).ShouldNot(HaveOccurred())
-					Expect(matched).ShouldNot(BeTrue())
+			Eventually(func() bool {
+				entries, err := os.ReadDir("/tmp")
+				Expect(err).ShouldNot(HaveOccurred())
+				for _, e := range entries {
+					if e.IsDir() {
+						matched, err := filepath.Match(utils.TmpDirPrefix+"*", regexp.QuoteMeta(e.Name()))
+						Expect(err).ShouldNot(HaveOccurred())
+						if matched {
+							fmt.Println(e.Name())
+							return true
+						}
+					}
 				}
-			}
+				return false
+			}).WithTimeout(5 * time.Second).Should(BeFalse())
 		})
 	}
 

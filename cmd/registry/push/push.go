@@ -180,7 +180,7 @@ func (o *pushOptions) runPush(ctx context.Context, args []string) error {
 					config = cfg
 				}
 			}
-			path, err := utils.CreateTarGzArchive(p)
+			path, err := utils.CreateTarGzArchive("", p)
 			if err != nil {
 				return err
 			}

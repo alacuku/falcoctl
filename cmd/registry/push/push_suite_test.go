@@ -18,9 +18,11 @@ package push_test
 import (
 	"context"
 	"fmt"
+	"github.com/falcosecurity/falcoctl/internal/utils"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -107,4 +109,24 @@ func executeRoot(args []string) error {
 	rootCmd.SetArgs(args)
 	rootCmd.SetOut(output)
 	return cmd.Execute(rootCmd, opt)
+}
+
+var checkTmpDir = func() (bool, error) {
+	entries, err := os.ReadDir("/tmp")
+	if err != nil {
+		return false, err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			matched, err := filepath.Match(utils.TmpDirPrefix+"*", regexp.QuoteMeta(e.Name()))
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
