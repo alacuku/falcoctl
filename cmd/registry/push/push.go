@@ -123,8 +123,8 @@ func (o *pushOptions) runPush(ctx context.Context, args []string) error {
 	ref := args[0]
 	paths := args[1:]
 	// When creating the tar.gz archives we need to remove them after we are done.
-	// We save the temporary dir where they live here.
-	var toBeDeleted string
+	// Holds the path for each temporary dir.
+	var toBeDeletedTmpDirs []string
 	logger := o.Printer.Logger
 
 	registry, err := utils.GetRegistryFromRef(ref)
@@ -144,10 +144,13 @@ func (o *pushOptions) runPush(ctx context.Context, args []string) error {
 
 	logger.Info("Preparing to push artifact", o.Printer.Logger.Args("name", args[0], "type", o.ArtifactType))
 
-	// Make sure to remove temporary working dir.
+	// Make sure to remove temporary working dirs.
 	defer func() {
-		if err := os.RemoveAll(toBeDeleted); err != nil {
-			logger.Warn("Unable to remove temporary dir", logger.Args("name", toBeDeleted, "error", err.Error()))
+		for _, dir := range toBeDeletedTmpDirs {
+			logger.Debug("Removing temporary dir", logger.Args("name", dir))
+			if err := os.RemoveAll(dir); err != nil {
+				logger.Warn("Unable to remove temporary dir", logger.Args("name", dir, "error", err.Error()))
+			}
 		}
 	}()
 
@@ -166,15 +169,23 @@ func (o *pushOptions) runPush(ctx context.Context, args []string) error {
 				if config, err = rulesConfigLayer(o.Printer.Logger, p, o.Artifact); err != nil {
 					return err
 				}
+			} else if o.ArtifactType == oci.Plugin {
+				var cfg *oci.ArtifactConfig
+				if cfg, err = pluginConfigLayer(o.Printer.Logger, p, o.Platforms[i], o.Artifact); err != nil {
+					return err
+				}
+				// This check is to prevent to overwrite the configuration with nil value when multiple platform plugin
+				// is processed.
+				if cfg != nil {
+					config = cfg
+				}
 			}
-			path, err := utils.CreateTarGzArchive(p)
+			path, err := utils.CreateTarGzArchive("", p)
 			if err != nil {
 				return err
 			}
 			paths[i] = path
-			if toBeDeleted == "" {
-				toBeDeleted = filepath.Dir(path)
-			}
+			toBeDeletedTmpDirs = append(toBeDeletedTmpDirs, filepath.Dir(path))
 		}
 	}
 
@@ -217,11 +228,14 @@ func (o *pushOptions) runPush(ctx context.Context, args []string) error {
 }
 
 const (
+	// depsKey is the key for deps in the rulesfiles.
 	depsKey = "required_plugin_versions"
 	// engineKey is the key in the rulesfiles.
 	engineKey = "required_engine_version"
 	// engineRequirementKey is used as name for the engine requirement in the config layer for the rulesfile artifacts.
 	engineRequirementKey = "engine_version_semver"
+	// pluginRequirementKey is used as name for the plugin api version requirement in the config layer for the plugin artifacts.
+	pluginRequirementKey = "plugin_api_version"
 )
 
 func rulesConfigLayer(logger *pterm.Logger, filePath string, artifactOptions *options.Artifact) (*oci.ArtifactConfig, error) {
@@ -242,10 +256,10 @@ func rulesConfigLayer(logger *pterm.Logger, filePath string, artifactOptions *op
 		return nil, fmt.Errorf("unable to unmarshal rulesfile %s: %w", filePath, err)
 	}
 
-	// Parse the plugin dependency.
+	// Parse the artifact dependencies.
 	// Check if the user has provided any.
 	if len(artifactOptions.Dependencies) != 0 {
-		logger.Info("Dependencies provided by user")
+		logger.Info("Dependencies provided by user", logger.Args("rulesfile", filePath))
 		if err = config.ParseDependencies(artifactOptions.Dependencies...); err != nil {
 			return nil, err
 		}

@@ -21,9 +21,15 @@ jobs:
         exclude:
           - goarch: arm64
             goos: windows
+        include:
+          - goarch: arm64
+            goos: linux
+            cc: aarch64-linux-gnu-gcc
+            cgo: 1
+      fail-fast: false
     steps:
       - name: Checkout commit
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
         with:
           fetch-depth: 0
 
@@ -33,13 +39,17 @@ jobs:
           go-version: '1.21'
           check-latest: true
 
+      - name: Install gcc for cross-compiling
+        run: sudo apt update && sudo apt install gcc-aarch64-linux-gnu
+
       - name: Build Falcoctl
         run: >
           go build -ldflags="-s -w" -o falcoctl-${{ matrix.goos }}-${{ matrix.goarch }} .
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: ${{ matrix.cgo }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
 
       - name: Create Archives
         run: |
@@ -154,7 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout commit
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
 
       - name: Setup Go
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
