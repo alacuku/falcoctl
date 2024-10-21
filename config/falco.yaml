@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: falco
+    repoURL: https://falcosecurity.github.io/charts
+    targetRevision: 4.11.1
+    helm:
+      releaseName: falco
+      values: |
+        metrics:
+          enabled: true
+        serviceMonitor:
+          create: true
+        grafana:
+          dashboards:
+            enabled: true
+        collectors:
+          kubernetes:
+            enabled: true
+        k8s-metacollector:
+          serviceMonitor:
+            create: true
+          grafana:
+            dashboards:
+              enabled: true
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: falco
+  syncPolicy:
+    syncPolicy:
+      automated: {}
+    syncOptions:
+      - CreateNamespace=true
